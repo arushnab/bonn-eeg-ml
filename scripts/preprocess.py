@@ -27,3 +27,13 @@ def load_eeg_folder(folder, limit=None, segment_length=None):
         if data is not None:
             eeg_data.append((filename, data))
     return eeg_data
+
+def get_dataset_label(filename):
+    if "Z" in filename:
+        return 0
+    elif "F" in filename:
+        return 1
+    elif "S" in filename:
+        return 2
+    else:
+        return -1 
