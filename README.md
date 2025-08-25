@@ -10,4 +10,8 @@ Built an end-to-end machine learning pipeline for seizure detection using the Bo
 - **Research Reproducibility**: Modular pipeline that saves trained models, logs results to JSON, and generates standardized diagnostic plots, enabling transparent and repeatable experiments.  
 
 ## Dataset  
-Single-channel EEG recordings (4097 samples at 173.61 Hz) from the University of Bonn, focusing on Sets Z (healthy), F (interictal), and S (seizure).  
+Single-channel EEG recordings (4097 samples at 173.61 Hz) from the University of Bonn, focusing on Sets Z (healthy), F (interictal), and S (seizure).
+
+> **Note**  
+> This repository is still being cleaned up and organized. Some files and documentation may change as the project is refined.
+
