@@ -1,77 +1,57 @@
-import joblib
-import os
 import numpy as np
 from preprocess import load_eeg_folder
-from extract_features import extract_bandpowers
+from extract_features import extract_all_features
 from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.ensemble import RandomForestClassifier
 
-
-def prepare_dataset(z_folder, s_folder, limit=100):
-    z_signals = load_eeg_folder(z_folder, limit)
-    s_signals = load_eeg_folder(s_folder, limit)
+# Z=0, F=1, S=2
+def build_dataset_three_folders(z_folder, f_folder, s_folder, limit=100, fs=256):
     X, y = [], []
-    
-    for _, signal in z_signals:
-        X.append(list(extract_bandpowers(signal).values()))
-        y.append(0)
+    feature_names = None
+    for _, sig in load_eeg_folder(z_folder, limit=limit):
+        feats, names = extract_all_features(sig, fs=fs)
+        feature_names = feature_names or names
+        X.append(feats); y.append(0)
+    for _, sig in load_eeg_folder(f_folder, limit=limit):
+        feats, _ = extract_all_features(sig, fs=fs)
+        X.append(feats); y.append(1)
+    for _, sig in load_eeg_folder(s_folder, limit=limit):
+        feats, _ = extract_all_features(sig, fs=fs)
+        X.append(feats); y.append(2)
+    return np.asarray(X, dtype=float), np.asarray(y, dtype=int), feature_names
 
-    for _, signal in s_signals:
-        X.append(list(extract_bandpowers(signal).values()))
-        y.append(1)
-    
-    return np.array(X), np.array(y)
+def train_and_eval(
+    z_folder="bonn-eeg-ml/z (2)/z/Z",
+    f_folder="bonn-eeg-ml/f/F",
+    s_folder="bonn-eeg-ml/s/S",
+    limit=100, fs=256, seed=42
+):
+    X, y, feature_names = build_dataset_three_folders(z_folder, f_folder, s_folder, limit=limit, fs=fs)
+    class_names = ["Z", "F", "S"]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=seed, stratify=y
+    )
+
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+    for i, (tr, va) in enumerate(skf.split(X_train, y_train), 1):
+        clf_cv = RandomForestClassifier(n_estimators=300, random_state=seed, n_jobs=-1)
+        clf_cv.fit(X_train[tr], y_train[tr])
+        print(f"Fold {i} done.")
+
+    clf = RandomForestClassifier(n_estimators=300, random_state=seed, n_jobs=-1)
+    clf.fit(X_train, y_train)
+
+    y_pred  = clf.predict(X_test)
+    y_probs = clf.predict_proba(X_test)  
+
+    return clf, (X_test, y_test), y_pred, y_probs, class_names, feature_names
 
 def main():
-    z_folder = "bonn-eeg-ml/z (2)/z/Z"
-    s_folder = "bonn-eeg-ml/s/S"
-    X, y = prepare_dataset(z_folder, s_folder)
-
-    print("Total samples:", len(X))
-#is np.unqiue really needed here??
-    print("Label distribtuion", np.unique(y, return_counts= True))
-
-    X_trainval, X_test, y_trainval, y_test = train_test_split(X, y, test_size=0.2, random_state = 42, stratify = y)
-    
-    ##print a whole bunch of yip yap
-
-    skf = StratifiedKFold(n_splits = 5, shuffle = True, random_state = 42)
-    print("\n--- Cross-validation on Training Data ---")
-    fold_accuracies = []
-
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X_trainval, y_trainval), 1):
-        X_train, X_val = X_trainval[train_idx], X_trainval[val_idx]
-        y_train, y_val = y_trainval[train_idx], y_trainval[val_idx]
-
-        model = LogisticRegression(max_iter=1000)
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_val)
-
-        acc = accuracy_score(y_val, y_pred)
-        fold_accuracies.append(acc)
-        print(f"\nFold {fold} Accuracy: {acc:.4f}")
-        print(classification_report(y_val, y_pred))
-
-    print(f"\nAverage Cross Validation Accuracy: {np.mean(fold_accuracies):.4f}")
-
-    # Final model training on the entire training+validation set 
-    final_model = LogisticRegression(max_iter=1000)
-    final_model.fit(X_trainval, y_trainval)
-    y_final_pred = final_model.predict(X_test)
-
-    print("\n--- Final Evaluation on Test Set ---")
-    print("Test Accuracy:", accuracy_score(y_test, y_final_pred))
-    print(classification_report(y_test, y_final_pred))
-
-    # Save the final model
-    os.makedirs("models", exist_ok = True)
-    joblib.dump(final_model, "models/w4_logreg_zs.pkl")
-
-    #Save the test data
-    os.makedirs("data", exist_ok=True)
-    joblib.dump(X_test, "data/w4_logreg_zs_Xtest.pkl")
-    joblib.dump(y_test, "data/w4_logreg_zs_ytest.pkl")
+  
+    from sklearn.metrics import accuracy_score
+    clf, (X_test, y_test), y_pred, _, _, _ = train_and_eval()
+    print(f"Test accuracy: {accuracy_score(y_test, y_pred):.4f}")
 
 if __name__ == "__main__":
     main()
